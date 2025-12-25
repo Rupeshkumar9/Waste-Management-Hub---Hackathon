@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waste Warriors - Google Powered Edition</title>
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+
+        .tab-btn.active {
+            border-bottom: 2px solid white;
+            background: rgba(255,255,255,0.1);
+        }
+        
+        #map { height: 100%; width: 100%; border-radius: 0.75rem; }
+        
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #22c55e;
+            width: 24px;
+            height: 24px;
+            -webkit-animation: spin 1s linear infinite; /* Safari */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- API Key Configuration Modal (Starts Open if keys missing) -->
+    <div id="apiKeyModal" class="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center hidden">
+        <div class="bg-white p-8 rounded-xl shadow-2xl max-w-md w-full mx-4">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800">⚙️ Google API Setup</h2>
+            <p class="text-sm text-gray-600 mb-6">To enable Google Maps and Gemini AI features, please enter your API keys. These are stored locally in your browser.</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Gemini API Key</label>
+                    <input type="password" id="geminiKeyInput" placeholder="AIzaSy..." class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none">
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-xs text-blue-500 hover:underline">Get Gemini Key</a>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Google Maps API Key</label>
+                    <input type="password" id="mapsKeyInput" placeholder="AIzaSy..." class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none">
+                    <a href="https://developers.google.com/maps/documentation/javascript/get-api-key" target="_blank" class="text-xs text-blue-500 hover:underline">Get Maps Key</a>
+                </div>
+                <button onclick="saveKeys()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition">Save & Start App</button>
+                <button onclick="closeModal()" class="w-full text-gray-500 text-sm py-2 hover:underline">Continue with Demo Mode (No AI/Maps)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-green-600 to-blue-600 text-white sticky top-0 z-50 shadow-lg">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-4">
+                <h1 class="text-2xl font-bold flex items-center gap-2">
+                    ♻️ Waste Warriors <span class="text-xs bg-white text-green-600 px-2 py-1 rounded-full">Google Edition</span>
+                </h1>
+                <div class="flex gap-4 text-sm mt-2 md:mt-0 items-center">
+                    <span class="bg-white/20 px-3 py-1 rounded-lg">🎯 Points: <strong id="totalPoints">0</strong></span>
+                    <span class="bg-white/20 px-3 py-1 rounded-lg">🏆 Level: <strong id="userLevel">Newcomer</strong></span>
+                    <button onclick="openSettings()" class="hover:bg-white/20 p-2 rounded-full transition">⚙️</button>
+                </div>
+            </div>
+            
+            <!-- Navigation -->
+            <nav class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                <button onclick="switchTab('analyzer')" class="tab-btn active px-4 py-2 font-medium whitespace-nowrap transition rounded hover:bg-white/10">🤖 Gemini Analyzer</button>
+                <button onclick="switchTab('map')" class="tab-btn px-4 py-2 font-medium whitespace-nowrap transition rounded hover:bg-white/10">🗺️ Google Map</button>
+                <button onclick="switchTab('rewards')" class="tab-btn px-4 py-2 font-medium whitespace-nowrap transition rounded hover:bg-white/10">🎁 Rewards</button>
+                <button onclick="switchTab('quiz')" class="tab-btn px-4 py-2 font-medium whitespace-nowrap transition rounded hover:bg-white/10">📚 Quiz</button>
+                <button onclick="switchTab('leaderboard')" class="tab-btn px-4 py-2 font-medium whitespace-nowrap transition rounded hover:bg-white/10">🏅 Leaderboard</button>
+                <button onclick="switchTab('impact')" class="tab-btn px-4 py-2 font-medium whitespace-nowrap transition rounded hover:bg-white/10">🌍 Impact</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8 max-w-5xl">
+
+        <!-- GEMINI ANALYZER SECTION -->
+        <section id="analyzer" class="section fade-in block">
+            <div class="grid md:grid-cols-2 gap-8">
+                <!-- Input Area -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-fit">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <span>📸</span> AI Waste Identifier
+                    </h2>
+                    <p class="text-gray-500 text-sm mb-6">Upload a photo or describe waste. Google Gemini will analyze recyclability instantly.</p>
+
+                    <div class="space-y-4">
+                        <!-- Drag & Drop / Upload -->
+                        <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:bg-green-50 hover:border-green-400 transition cursor-pointer relative group" onclick="document.getElementById('fileInput').click()">
+                            <input type="file" id="fileInput" class="hidden" accept="image/*" onchange="previewImage(this)">
+                            <div id="uploadPlaceholder">
+                                <div class="text-4xl mb-2">☁️</div>
+                                <p class="text-sm font-medium text-gray-600">Click to upload image</p>
+                                <p class="text-xs text-gray-400 mt-1">Supports JPG, PNG</p>
+                            </div>
+                            <img id="imagePreview" class="hidden max-h-48 mx-auto rounded shadow-lg object-contain" />
+                            <div id="removeImageBtn" class="hidden absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center shadow hover:bg-red-600 z-10" onclick="clearImage(event)">×</div>
+                        </div>
+
+                        <!-- Text Input -->
+                        <div>
+                            <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Or describe the item</label>
+                            <textarea id="textInput" rows="3" class="w-full p-3 bg-gray-50 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none" placeholder="e.g., A crushed aluminum soda can..."></textarea>
+                        </div>
+
+                        <button onclick="analyzeWithGemini()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-lg shadow-blue-200 transition flex justify-center items-center gap-2">
+                            <span id="analyzeBtnText">✨ Analyze with Gemini</span>
+                            <div id="analyzeLoader" class="loader hidden"></div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Result Area -->
+                <div class="space-y-6">
+                    <!-- AI Output -->
+                    <div id="aiResultCard" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hidden">
+                        <div class="flex items-center gap-2 mb-4 pb-4 border-b">
+                            <div class="bg-blue-100 text-blue-600 p-2 rounded-lg">🧠</div>
+                            <h3 class="font-bold text-lg">Analysis Result</h3>
+                        </div>
+                        <div id="geminiOutput" class="prose prose-sm max-w-none text-gray-600"></div>
+                        <div class="mt-4 pt-4 border-t flex justify-between items-center">
+                            <span class="text-xs text-gray-400">Powered by Gemini 1.5 Flash</span>
+                            <button onclick="logRecyclingAction()" class="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-medium hover:bg-green-200 transition">Action Completed (+10 pts)</button>
+                        </div>
+                    </div>
+
+                    <!-- Guidelines -->
+                    <div class="bg-green-50 p-6 rounded-xl border border-green-100">
+                        <h3 class="font-bold text-green-800 mb-3">Quick Guide</h3>
+                        <ul class="space-y-2 text-sm text-green-700">
+                            <li class="flex items-start gap-2">✅ <span><strong>Clean:</strong> Rinse food containers.</span></li>
+                            <li class="flex items-start gap-2">✅ <span><strong>Dry:</strong> Keep paper/cardboard dry.</span></li>
+                            <li class="flex items-start gap-2">❌ <span><strong>No Hazardous:</strong> Batteries go to e-waste.</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- GOOGLE MAP SECTION -->
+        <section id="map" class="section hidden">
+            <div class="grid lg:grid-cols-3 gap-6 h-[600px]">
+                <!-- Map Container -->
+                <div class="lg:col-span-2 bg-gray-200 rounded-xl shadow-inner relative overflow-hidden group">
+                    <div id="googleMap" class="w-full h-full"></div>
+                    <!-- Map Overlay when key missing -->
+                    <div id="mapOverlay" class="absolute inset-0 bg-gray-100 flex flex-col items-center justify-center text-center p-6 z-10">
+                        <p class="text-gray-500 mb-4">Map requires configuration.</p>
+                        <button onclick="openSettings()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">Enter Google Maps API Key</button>
+                    </div>
+                </div>
+
+                <!-- Report Form -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col h-full overflow-y-auto">
+                    <h2 class="text-xl font-bold mb-4">📍 Report Waste</h2>
+                    
+                    <form onsubmit="submitReport(event)" class="space-y-4 flex-grow">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Waste Type</label>
+                            <select id="reportType" class="w-full p-2 border rounded-lg bg-gray-50">
+                                <option value="Plastic">🟢 Plastic</option>
+                                <option value="Glass">🔵 Glass</option>
+                                <option value="Metal">🟡 Metal</option>
+                                <option value="Organic">🟤 Organic</option>
+                                <option value="E-Waste">🔴 E-Waste</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Location Details</label>
+                            <input type="text" id="reportLocation" placeholder="Click on map to set location" class="w-full p-2 border rounded-lg bg-gray-50" readonly>
+                            <input type="hidden" id="reportLat">
+                            <input type="hidden" id="reportLng">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Description</label>
+                            <textarea id="reportDesc" rows="3" class="w-full p-2 border rounded-lg bg-gray-50" placeholder="Quantity, condition..."></textarea>
+                        </div>
+
+                        <div class="pt-4 mt-auto">
+                            <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-md transition">Submit Report (+25 pts)</button>
+                        </div>
+                    </form>
+
+                    <div class="mt-6 border-t pt-4">
+                        <h4 class="font-bold text-sm text-gray-700 mb-2">Legend</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Plastic</div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-500"></span> Glass</div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-500"></span> Metal</div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500"></span> E-Waste</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- REWARDS SECTION -->
+        <section id="rewards" class="section hidden">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-2">🎁 Marketplace</h2>
+                <p class="text-gray-500 text-sm">Redeem your hard-earned points for exclusive rewards!</p>
+            </div>
+            
+            <div id="rewardsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                <!-- Rewards populated by JS -->
+            </div>
+        </section>
+
+        <!-- QUIZ SECTION -->
+        <section id="quiz" class="section hidden">
+            <div class="bg-white max-w-2xl mx-auto p-8 rounded-xl shadow-sm border border-gray-100">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold">♻️ Recycling Quiz</h2>
+                    <span id="quizProgress" class="text-sm font-medium text-blue-600">Question 1/5</span>
+                </div>
+                
+                <div class="w-full bg-gray-100 rounded-full h-2 mb-8">
+                    <div id="quizBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 20%"></div>
+                </div>
+
+                <div id="quizContainer">
+                    <h3 id="questionText" class="text-lg font-medium mb-6">Loading...</h3>
+                    <div id="optionsGrid" class="space-y-3"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- LEADERBOARD SECTION -->
+        <section id="leaderboard" class="section hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="p-6 border-b bg-gray-50">
+                    <h2 class="text-xl font-bold">🏆 Weekly Top Warriors</h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="text-xs uppercase text-gray-500 border-b">
+                                <th class="px-6 py-4">Rank</th>
+                                <th class="px-6 py-4">User</th>
+                                <th class="px-6 py-4 text-right">Reports</th>
+                                <th class="px-6 py-4 text-right">Points</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboardBody" class="text-sm">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- IMPACT SECTION -->
+        <section id="impact" class="section hidden">
+            <div class="grid md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-xl shadow-lg">
+                    <div class="text-4xl mb-2">♻️</div>
+                    <div class="text-3xl font-bold mb-1" id="impactItems">0</div>
+                    <div class="text-green-100 text-sm">Items Diverted</div>
+                </div>
+                <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-xl shadow-lg">
+                    <div class="text-4xl mb-2">💨</div>
+                    <div class="text-3xl font-bold mb-1" id="impactCo2">0.0</div>
+                    <div class="text-blue-100 text-sm">kg CO₂ Saved</div>
+                </div>
+                <div class="bg-gradient-to-br from-teal-500 to-teal-600 text-white p-6 rounded-xl shadow-lg">
+                    <div class="text-4xl mb-2">💧</div>
+                    <div class="text-3xl font-bold mb-1" id="impactWater">0</div>
+                    <div class="text-teal-100 text-sm">Liters Water Saved</div>
+                </div>
+            </div>
+            
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-8">
+                <h3 class="font-bold text-gray-800 mb-4">Milestones</h3>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>Level 1: Novice Recycler</span>
+                            <span class="text-green-600">50/100 pts</span>
+                        </div>
+                        <div class="w-full bg-gray-100 rounded-full h-2">
+                            <div class="bg-green-500 h-2 rounded-full" style="width: 50%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Real-Life Impact Examples Footer -->
+            <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-8">
+                <h4 class="text-lg font-bold text-indigo-900 mb-4 flex items-center gap-2">
+                    💡 Real-Life Impact Examples
+                </h4>
+                <ul class="space-y-3 text-sm text-indigo-800 font-medium">
+                    <li class="flex items-start gap-3">
+                        <span>✅</span> 10 plastic bottles = 0.5 kg plastic diverted from landfill
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span>✅</span> 20 aluminum cans = 1.2 kg CO₂ prevented (vs. new production)
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span>✅</span> 1 kg of plastic = ~86 liters of water saved in production
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span>✅</span> 500 kg recycled material = 1 tree equivalent carbon offset
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span>✅</span> Compared to landfill: saves 78% more emissions
+                    </li>
+                </ul>
+            </div>
+        </section>
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 transition-transform duration-300 z-50 flex items-center gap-3">
+        <span id="toastIcon">✅</span>
+        <span id="toastMsg">Action Successful</span>
+    </div>
+
+    <script>
+        // --- STATE MANAGEMENT ---
+        const AppState = {
+            points: 0,
+            co2: 0,
+            water: 0,
+            items: 0,
+            keys: {
+                gemini: localStorage.getItem('gemini_key') || '',
+                maps: localStorage.getItem('maps_key') || ''
+            },
+            quizIndex: 0,
+            redeemed: [] // Track redeemed reward IDs
+        };
+
+        const rewardsData = [
+            { id: 1, name: 'Canteen Voucher', cost: 50, emoji: '🍔', desc: '₹50 Food Voucher' },
+            { id: 2, name: 'Coffee Coupon', cost: 30, emoji: '☕', desc: 'Free Coffee' },
+            { id: 3, name: 'Movie Discount', cost: 100, emoji: '🎬', desc: '20% Off Ticket' },
+            { id: 4, name: 'Plant a Tree', cost: 50, emoji: '🌱', description: 'Environment Donation' },
+            { id: 5, name: 'Eco T-Shirt', cost: 200, emoji: '👕', description: 'Eco Warrior Shirt' },
+            { id: 6, name: 'Water Bottle', cost: 150, emoji: '🧴', description: 'Reusable Bottle' }
+        ];
+
+        // --- INIT & CONFIG ---
+        window.addEventListener('load', () => {
+            updateUI();
+            initLeaderboard();
+            initQuiz();
+            renderRewards(); // Initial render of rewards
+            
+            // Check keys
+            if (!AppState.keys.gemini || !AppState.keys.maps) {
+                document.getElementById('apiKeyModal').classList.remove('hidden');
+            } else {
+                loadGoogleMaps();
+            }
+        });
+
+        function saveKeys() {
+            const gemini = document.getElementById('geminiKeyInput').value.trim();
+            const maps = document.getElementById('mapsKeyInput').value.trim();
+            
+            if (gemini) localStorage.setItem('gemini_key', gemini);
+            if (maps) localStorage.setItem('maps_key', maps);
+            
+            AppState.keys.gemini = gemini;
+            AppState.keys.maps = maps;
+            
+            closeModal();
+            if (maps) loadGoogleMaps();
+            showToast('API Keys Saved! Reloading...', '💾');
+            setTimeout(() => location.reload(), 1000);
+        }
+
+        function closeModal() {
+            document.getElementById('apiKeyModal').classList.add('hidden');
+        }
+
+        function openSettings() {
+            document.getElementById('geminiKeyInput').value = AppState.keys.gemini;
+            document.getElementById('mapsKeyInput').value = AppState.keys.maps;
+            document.getElementById('apiKeyModal').classList.remove('hidden');
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+            document.getElementById(tabId).classList.add('fade-in');
+            
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Resize map if switching to map tab
+            if (tabId === 'map' && window.mapInstance) {
+                setTimeout(() => google.maps.event.trigger(window.mapInstance, 'resize'), 100);
+            }
+        }
+
+        // --- REWARDS LOGIC ---
+        function renderRewards() {
+            const grid = document.getElementById('rewardsGrid');
+            grid.innerHTML = '';
+            
+            rewardsData.forEach(reward => {
+                const isLocked = AppState.points < reward.cost;
+                const isRedeemed = AppState.redeemed.includes(reward.id);
+                
+                let btnHtml = '';
+                if (isRedeemed) {
+                    btnHtml = `<button disabled class="w-full bg-gray-200 text-gray-500 font-bold py-2 rounded-lg cursor-not-allowed">Redeemed</button>`;
+                } else if (isLocked) {
+                    btnHtml = `<button disabled class="w-full bg-gray-100 text-gray-400 font-bold py-2 rounded-lg cursor-not-allowed text-xs">Need ${reward.cost - AppState.points} more pts</button>`;
+                } else {
+                    btnHtml = `<button onclick="redeemReward(${reward.id})" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg transition shadow">Redeem</button>`;
+                }
+
+                const card = document.createElement('div');
+                card.className = `bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center text-center transition hover:shadow-md ${isLocked ? 'opacity-70' : ''}`;
+                card.innerHTML = `
+                    <div class="text-5xl mb-4 bg-gray-50 p-4 rounded-full w-24 h-24 flex items-center justify-center">${reward.emoji}</div>
+                    <h3 class="font-bold text-lg text-gray-800">${reward.name}</h3>
+                    <p class="text-xs text-gray-500 mb-3">${reward.desc}</p>
+                    <div class="text-green-600 font-bold mb-4">${reward.cost} Pts</div>
+                    ${btnHtml}
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function redeemReward(id) {
+            const reward = rewardsData.find(r => r.id === id);
+            if (reward && AppState.points >= reward.cost) {
+                AppState.points -= reward.cost;
+                AppState.redeemed.push(id);
+                updateUI(); // Updates points display and re-renders buttons
+                showToast(`Redeemed: ${reward.name}!`, '🎉');
+            }
+        }
+
+        // --- GOOGLE MAPS INTEGRATION ---
+        function loadGoogleMaps() {
+            if (!AppState.keys.maps) return;
+            if (document.getElementById('gmaps-script')) return;
+
+            const script = document.createElement('script');
+            script.id = 'gmaps-script';
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${AppState.keys.maps}&callback=initMap&libraries=places`;
+            script.async = true;
+            script.defer = true;
+            script.onerror = () => showToast('Invalid Maps API Key', '❌');
+            document.head.appendChild(script);
+        }
+
+        window.initMap = function() {
+            document.getElementById('mapOverlay').classList.add('hidden');
+            const patna = { lat: 25.5941, lng: 85.1376 };
+            
+            window.mapInstance = new google.maps.Map(document.getElementById("googleMap"), {
+                zoom: 13,
+                center: patna,
+                mapId: "DEMO_MAP_ID",
+                disableDefaultUI: false,
+                zoomControl: true,
+                mapTypeControl: false
+            });
+
+            window.mapInstance.addListener("click", (e) => {
+                const lat = e.latLng.lat();
+                const lng = e.latLng.lng();
+                document.getElementById('reportLocation').value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+                document.getElementById('reportLat').value = lat;
+                document.getElementById('reportLng').value = lng;
+                
+                if (window.tempMarker) window.tempMarker.setMap(null);
+                window.tempMarker = new google.maps.Marker({
+                    position: e.latLng,
+                    map: window.mapInstance,
+                    animation: google.maps.Animation.DROP
+                });
+            });
+
+            const sampleReports = [
+                { lat: 25.5941, lng: 85.1376, type: "Plastic", desc: "Heap of bottles near gate" },
+                { lat: 25.5950, lng: 85.1390, type: "Glass", desc: "Broken jars behind library" },
+                { lat: 25.5930, lng: 85.1360, type: "Metal", desc: "Cans near canteen" }
+            ];
+
+            sampleReports.forEach(addMarker);
+        };
+
+        function addMarker(report) {
+            if (!window.mapInstance) return;
+
+            const colors = {
+                "Plastic": "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
+                "Glass": "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+                "Metal": "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png",
+                "Organic": "http://maps.google.com/mapfiles/ms/icons/orange-dot.png",
+                "E-Waste": "http://maps.google.com/mapfiles/ms/icons/red-dot.png"
+            };
+
+            const marker = new google.maps.Marker({
+                position: { lat: report.lat, lng: report.lng },
+                map: window.mapInstance,
+                icon: colors[report.type] || colors["Plastic"],
+                title: report.type
+            });
+
+            const infoWindow = new google.maps.InfoWindow({
+                content: `
+                    <div style="padding:5px; color:#333">
+                        <strong style="color:#059669">${report.type} Waste</strong><br>
+                        <p>${report.desc}</p>
+                    </div>
+                `
+            });
+
+            marker.addListener("click", () => {
+                infoWindow.open(window.mapInstance, marker);
+            });
+        }
+
+        function submitReport(e) {
+            e.preventDefault();
+            const lat = parseFloat(document.getElementById('reportLat').value);
+            const lng = parseFloat(document.getElementById('reportLng').value);
+            const type = document.getElementById('reportType').value;
+            const desc = document.getElementById('reportDesc').value;
+
+            if (!lat || !lng) {
+                showToast("Please click on the map to set location!", "📍");
+                return;
+            }
+
+            addMarker({ lat, lng, type, desc });
+            if (window.tempMarker) window.tempMarker.setMap(null);
+
+            addPoints(25);
+            showToast("Report Submitted! +25 Points", "🎉");
+            
+            e.target.reset();
+            document.getElementById('reportLocation').value = "";
+        }
+
+        // --- GEMINI AI INTEGRATION ---
+        let currentBase64Image = null;
+
+        function previewImage(input) {
+            const file = input.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    currentBase64Image = e.target.result.split(',')[1]; 
+                    const preview = document.getElementById('imagePreview');
+                    preview.src = e.target.result;
+                    preview.classList.remove('hidden');
+                    document.getElementById('uploadPlaceholder').classList.add('hidden');
+                    document.getElementById('removeImageBtn').classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function clearImage(e) {
+            e.stopPropagation();
+            document.getElementById('fileInput').value = "";
+            document.getElementById('imagePreview').classList.add('hidden');
+            document.getElementById('uploadPlaceholder').classList.remove('hidden');
+            document.getElementById('removeImageBtn').classList.add('hidden');
+            currentBase64Image = null;
+        }
+
+        async function analyzeWithGemini() {
+            if (!AppState.keys.gemini) {
+                openSettings();
+                return;
+            }
+
+            const text = document.getElementById('textInput').value;
+            if (!text && !currentBase64Image) {
+                showToast("Please provide an image or description.", "⚠️");
+                return;
+            }
+
+            const btn = document.getElementById('analyzeBtnText');
+            const loader = document.getElementById('analyzeLoader');
+            btn.textContent = "Analyzing...";
+            loader.classList.remove('hidden');
+
+            try {
+                const contentsPart = [];
+                if (text) contentsPart.push({ text: text });
+                if (currentBase64Image) {
+                    contentsPart.push({
+                        inlineData: {
+                            mimeType: "image/jpeg",
+                            data: currentBase64Image
+                        }
+                    });
+                }
+                
+                contentsPart.push({ text: "\n\nIdentify this waste item. Is it recyclable? If yes, into which bin color (Green=Plastic, Blue=Glass, Yellow=Metal, Red=Hazardous)? Provide 3 bullet points on how to prepare it." });
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${AppState.keys.gemini}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: contentsPart }]
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.error) throw new Error(data.error.message);
+
+                const resultText = data.candidates[0].content.parts[0].text;
+                
+                const formattedHtml = resultText
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') 
+                    .replace(/\n/g, '<br>'); 
+
+                document.getElementById('geminiOutput').innerHTML = formattedHtml;
+                document.getElementById('aiResultCard').classList.remove('hidden');
+
+            } catch (error) {
+                console.error(error);
+                showToast("AI Error: " + error.message, "🚨");
+            } finally {
+                btn.textContent = "✨ Analyze with Gemini";
+                loader.classList.add('hidden');
+            }
+        }
+
+        function logRecyclingAction() {
+            addPoints(10);
+            AppState.items += 1;
+            AppState.co2 += 0.5;
+            AppState.water += 10;
+            updateUI();
+            showToast("Recycling Logged! +10 Points", "♻️");
+            document.getElementById('aiResultCard').classList.add('hidden');
+            clearImage({ stopPropagation: () => {} });
+            document.getElementById('textInput').value = "";
+        }
+
+        // --- GAMIFICATION & UI ---
+        function addPoints(pts) {
+            AppState.points += pts;
+            updateUI();
+        }
+
+        function updateUI() {
+            // Points & Level
+            document.getElementById('totalPoints').textContent = AppState.points;
+            let level = "Newcomer";
+            if (AppState.points > 100) level = "Bronze Scavenger";
+            if (AppState.points > 300) level = "Silver Guardian";
+            if (AppState.points > 500) level = "Gold Warrior";
+            document.getElementById('userLevel').textContent = level;
+
+            // Impact
+            document.getElementById('impactItems').textContent = AppState.items;
+            document.getElementById('impactCo2').textContent = AppState.co2.toFixed(1);
+            document.getElementById('impactWater').textContent = AppState.items * 10;
+            
+            // Re-render rewards to update locked/unlocked states
+            renderRewards();
+        }
+
+        function showToast(msg, icon) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').textContent = msg;
+            document.getElementById('toastIcon').textContent = icon;
+            toast.classList.remove('translate-y-20');
+            setTimeout(() => toast.classList.add('translate-y-20'), 3000);
+        }
+
+        // --- QUIZ DATA ---
+        const quizQuestions = [
+            { q: "Which of these is NOT recyclable?", opts: ["Plastic Bottle", "Pizza Box (Greasy)", "Newspaper", "Soda Can"], ans: 1 },
+            { q: "What color bin is usually for glass?", opts: ["Green", "Blue", "Red", "Black"], ans: 1 },
+            { q: "How long does a plastic bottle take to decompose?", opts: ["10 years", "50 years", "450 years", "Forever"], ans: 2 },
+            { q: "Can you recycle batteries in normal bins?", opts: ["Yes", "No", "Sometimes", "Only AA"], ans: 1 },
+            { q: "What percentage of plastic is actually recycled globally?", opts: ["9%", "25%", "50%", "80%"], ans: 0 }
+        ];
+
+        function initQuiz() {
+            loadQuestion(0);
+        }
+
+        function loadQuestion(idx) {
+            AppState.quizIndex = idx;
+            const q = quizQuestions[idx];
+            document.getElementById('questionText').textContent = q.q;
+            document.getElementById('quizProgress').textContent = `Question ${idx + 1}/${quizQuestions.length}`;
+            document.getElementById('quizBar').style.width = `${((idx + 1) / quizQuestions.length) * 100}%`;
+            
+            const grid = document.getElementById('optionsGrid');
+            grid.innerHTML = '';
+            
+            q.opts.forEach((opt, i) => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left p-4 rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition";
+                btn.textContent = opt;
+                btn.onclick = () => checkAnswer(i, q.ans);
+                grid.appendChild(btn);
+            });
+        }
+
+        function checkAnswer(selected, correct) {
+            if (selected === correct) {
+                showToast("Correct! +15 Points", "✅");
+                addPoints(15);
+            } else {
+                showToast("Wrong Answer!", "❌");
+            }
+
+            if (AppState.quizIndex < quizQuestions.length - 1) {
+                setTimeout(() => loadQuestion(AppState.quizIndex + 1), 1000);
+            } else {
+                showToast("Quiz Complete!", "🏆");
+                setTimeout(() => loadQuestion(0), 2000);
+            }
+        }
+
+        // --- LEADERBOARD ---
+        function initLeaderboard() {
+            const users = [
+                { name: "You", reports: 5, pts: AppState.points },
+                { name: "Priya Singh", reports: 45, pts: 1200 },
+                { name: "Rahul Kumar", reports: 38, pts: 950 },
+                { name: "Amit Shah", reports: 32, pts: 800 },
+                { name: "Sara Khan", reports: 28, pts: 750 }
+            ];
+            
+            // Sync 'You' score
+            users[0].pts = AppState.points;
+            users[0].reports = AppState.items;
+
+            users.sort((a,b) => b.pts - a.pts);
+
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = '';
+            
+            users.forEach((u, i) => {
+                const row = `
+                    <tr class="border-b hover:bg-gray-50 ${u.name === 'You' ? 'bg-green-50' : ''}">
+                        <td class="px-6 py-4 font-bold text-gray-500">#${i + 1}</td>
+                        <td class="px-6 py-4 font-medium">${u.name} ${i===0?'👑':''}</td>
+                        <td class="px-6 py-4 text-right">${u.reports}</td>
+                        <td class="px-6 py-4 text-right font-bold text-green-600">${u.pts}</td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+    </script>
+</body>
+</html>
